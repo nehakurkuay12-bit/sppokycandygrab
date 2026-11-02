@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spooky Candy Grab</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  html, body { margin: 0; background: #0b0614; color: #ff8c1a; font-family: monospace; text-align: center; }
+  :root { color-scheme: dark; box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  canvas { max-width: 100%; height: auto !important; }
+  p { margin: 6px; font-size: 14px; }
+</style>
+</head>
+<body>
+<p>Arrow keys or WASD to move. Click the game first!</p>
+<script>
+// SPOOKY CANDY GRAB by me
+
+
+var state = "title";   // title, play, between, over, win
+var level = 1;
+var score = 0;
+var lives = 3;
+var px = 300, py = 300;   // player pos
+var spd = 4;
+var candies = [];
+var bats = [];
+var ghost = null;   // chaser ghost only shows up on level 3+
+var hurtTimer = 0;  // so u dont lose all lives at once lol
+var stars = [];
+var maxLevel = 5;
+
+function setup() {
+  createCanvas(600, 600);
+  textFont("monospace");
+  // make a bunch of stars
+  for (var i = 0; i < 40; i++) {
+    stars.push([random(width), random(height / 2), random(1, 3)]);
+  }
+}
+
+function startLevel() {
+  candies = [];
+  bats = [];
+  ghost = null;
+  px = 300;
+  py = 540;
+  hurtTimer = 0;
+
+  // more candy each level
+  for (var i = 0; i < 4 + level * 2; i++) {
+    candies.push({ x: random(40, 560), y: random(80, 480) });
+  }
+  // more bats each level and they get faster
+  for (var j = 0; j < level + 1; j++) {
+    bats.push({
+      x: random(50, 550),
+      y: random(100, 350),
+      dx: random(1.5, 2.5 + level * 0.5) * (random() < 0.5 ? 1 : -1),
+      dy: random(1, 2 + level * 0.4) * (random() < 0.5 ? 1 : -1)
+    });
+  }
+  if (level >= 3) {
+    ghost = { x: 50, y: 80, s: 0.6 + level * 0.15 };
+  }
+  state = "play";
+}
+
+function draw() {
+  drawBackground();
+
+  if (state == "title") {
+    drawTitle();
+  } else if (state == "play") {
+    playGame();
+  } else if (state == "between") {
+    bigText("LEVEL " + (level - 1) + " DONE!", 220, 50);
+    smallText("score: " + score, 280);
+    smallText("click to go to level " + level + "...", 340);
+    smallText("it gets harder btw", 380);
+  } else if (state == "over") {
+    bigText("U DIED :(", 230, 60);
+    smallText("final score: " + score, 300);
+    smallText("click to try again", 350);
+  } else if (state == "win") {
+    bigText("U WIN!!!", 220, 60);
+    smallText("score: " + score, 290);
+    smallText("ur the candy king", 330);
+    smallText("click to play again", 380);
+  }
+}
+
+function drawBackground() {
+  background(20, 8, 40);
+  // stars
+  noStroke();
+  fill(255, 255, 200);
+  for (var i = 0; i < stars.length; i++) {
+    ellipse(stars[i][0], stars[i][1], stars[i][2]);
+  }
+  // moon
+  fill(255, 250, 210);
+  ellipse(500, 90, 80, 80);
+  fill(230, 225, 185);
+  ellipse(485, 80, 15, 15);
+  ellipse(515, 105, 10, 10);
+  // graveyard ground
+  fill(10, 5, 20);
+  rect(0, 560, 600, 40);
+  // tombstones
+  for (var t = 0; t < 5; t++) {
+    var tx = 40 + t * 130;
+    fill(60, 60, 75);
+    rect(tx, 535, 22, 30, 8, 8, 0, 0);
+    fill(90);
+    rect(tx + 10, 543, 2, 10);
+    rect(tx + 6, 547, 10, 2);
+  }
+}
+
+function drawTitle() {
+  fill(255, 140, 26);
+  textAlign(CENTER);
+  textSize(48);
+  text("SPOOKY", 300, 200);
+  text("CANDY GRAB", 300, 255);
+  drawGhost(300, 330 + sin(frameCount * 0.1) * 10, 1.3);
+  smallText("collect all the candy corn", 410);
+  smallText("dont touch the bats!!", 440);
+  smallText("5 levels. click to start", 490);
+}
+
+function playGame() {
+  // moving the player
+  if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) px -= spd;
+  if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) px += spd;
+  if (keyIsDown(UP_ARROW) || keyIsDown(87)) py -= spd;
+  if (keyIsDown(DOWN_ARROW) || keyIsDown(83)) py += spd;
+  px = constrain(px, 20, 580);
+  py = constrain(py, 20, 580);
+
+  // candy
+  for (var i = candies.length - 1; i >= 0; i--) {
+    var c = candies[i];
+    drawCandy(c.x, c.y);
+    if (dist(px, py, c.x, c.y) < 25) {
+      candies.splice(i, 1);   // eat it
+      score += 10;
+    }
+  }
+
+  // bats
+  for (var b = 0; b < bats.length; b++) {
+    var bat = bats[b];
+    bat.x += bat.dx;
+    bat.y += bat.dy;
+    // bounce off walls
+    if (bat.x < 20 || bat.x > 580) bat.dx = -bat.dx;
+    if (bat.y < 20 || bat.y > 520) bat.dy = -bat.dy;
+    drawBat(bat.x, bat.y);
+    if (dist(px, py, bat.x, bat.y) < 28) hitPlayer();
+  }
+
+  // chaser ghost
+  if (ghost != null) {
+    if (ghost.x < px) ghost.x += ghost.s; else ghost.x -= ghost.s;
+    if (ghost.y < py) ghost.y += ghost.s; else ghost.y -= ghost.s;
+    drawEvilGhost(ghost.x, ghost.y);
+    if (dist(px, py, ghost.x, ghost.y) < 30) hitPlayer();
+  }
+
+  if (hurtTimer > 0) hurtTimer--;
+
+  // draw player (blinks when hurt)
+  if (hurtTimer == 0 || frameCount % 6 < 3) {
+    drawGhost(px, py, 1);
+  }
+
+  drawHUD();
+
+  // all candy gone = next level
+  if (candies.length == 0) {
+    level++;
+    if (level > maxLevel) {
+      state = "win";
+    } else {
+      state = "between";
+    }
+  }
+}
+
+function hitPlayer() {
+  if (hurtTimer > 0) return;   // still invincible
+  lives--;
+  hurtTimer = 90;
+  if (lives <= 0) state = "over";
+}
+
+function drawHUD() {
+  fill(255, 140, 26);
+  textAlign(LEFT);
+  textSize(18);
+  text("Level " + level + "/" + maxLevel, 12, 24);
+  text("Score: " + score, 12, 46);
+  textAlign(RIGHT);
+  var hearts = "";
+  for (var i = 0; i < lives; i++) hearts += "♥ ";
+  fill(255, 60, 80);
+  text(hearts, 588, 24);
+}
+
+// ---- drawing stuff ----
+function drawGhost(x, y, s) {
+  push();
+  translate(x, y);
+  scale(s);
+  noStroke();
+  fill(255, 255, 255, 235);
+  ellipse(0, -4, 36, 36);
+  rect(-18, -4, 36, 22);
+  // wavy bottom
+  triangle(-18, 18, -12, 28, -6, 18);
+  triangle(-6, 18, 0, 28, 6, 18);
+  triangle(6, 18, 12, 28, 18, 18);
+  fill(0);
+  ellipse(-6, -6, 6, 8);
+  ellipse(6, -6, 6, 8);
+  ellipse(0, 6, 8, 6);
+  pop();
+}
+
+function drawEvilGhost(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+  fill(120, 255, 140, 200);
+  ellipse(0, -4, 40, 40);
+  rect(-20, -4, 40, 24);
+  triangle(-20, 20, -10, 32, 0, 20);
+  triangle(0, 20, 10, 32, 20, 20);
+  fill(255, 0, 0);
+  triangle(-12, -12, -2, -6, -12, -4);
+  triangle(12, -12, 2, -6, 12, -4);
+  fill(0);
+  ellipse(0, 8, 14, 10);
+  pop();
+}
+
+function drawBat(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+  fill(30, 20, 50);
+  var flap = sin(frameCount * 0.4) * 8;
+  triangle(0, 0, -28, -10 + flap, -20, 8);
+  triangle(0, 0, 28, -10 + flap, 20, 8);
+  ellipse(0, 0, 16, 18);
+  triangle(-6, -8, -4, -16, -1, -8);
+  triangle(6, -8, 4, -16, 1, -8);
+  fill(255, 0, 0);
+  ellipse(-3, -2, 3, 3);
+  ellipse(3, -2, 3, 3);
+  pop();
+}
+
+function drawCandy(x, y) {
+  // candy corn (kinda)
+  push();
+  translate(x, y + sin(frameCount * 0.1 + x) * 2);
+  noStroke();
+  fill(255, 140, 0);
+  triangle(-10, 10, 10, 10, 0, -12);
+  fill(255, 230, 0);
+  triangle(-6, -2, 6, -2, 0, -12);
+  fill(255);
+  rect(-10, 6, 20, 5);
+  pop();
+}
+
+function bigText(t, y, size) {
+  fill(255, 140, 26);
+  textAlign(CENTER);
+  textSize(size);
+  text(t, 300, y);
+}
+
+function smallText(t, y) {
+  fill(230, 200, 255);
+  textAlign(CENTER);
+  textSize(20);
+  text(t, 300, y);
+}
+
+function mousePressed() {
+  if (state == "title") {
+    level = 1; score = 0; lives = 3;
+    startLevel();
+  } else if (state == "between") {
+    startLevel();
+  } else if (state == "over" || state == "win") {
+    state = "title";
+  }
+}
+</script>
+</body>
+</html>
